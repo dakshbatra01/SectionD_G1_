@@ -2,8 +2,8 @@
 
 ##  Dataset Information
 - Dataset Name: Loan_Default_Raw.csv
-- Total Rows (Initial): [add df.shape]
-- Total Columns: [add df.shape]
+- Total Rows (Initial): 15,000
+- Total Columns: 34
 
 ---
 
