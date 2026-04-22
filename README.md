@@ -34,7 +34,7 @@
 
 ## Business Problem
 
-In the lending sector, financial institutions must decide which borrowers to approve while minimizing the risk of loan defaults. This project is designed for risk analysts and lending managers who need data-driven insights to make better credit decisions. The core challenge is identifying high-risk borrowers early, using historical loan and borrower data. By analyzing patterns in credit behavior, this system helps improve approval strategies and reduce financial losses.
+Financial institutions face significant losses due to loan defaults and inefficient borrower screening. This project identifies the key financial and behavioral factors driving loan defaults and develops a data-driven risk segmentation framework to support more effective lending decisions and improved portfolio performance.
 
 **Core Business Question**
 
@@ -42,7 +42,7 @@ In the lending sector, financial institutions must decide which borrowers to app
 
 **Decision Supported**
 
-> This analysis enables stakeholders to decide whether to approve, reject, or modify loan applications by assessing the borrower’s default risk, allowing for more informed and risk-aware lending decisions.
+> This analysis enables lenders to redesign their loan approval strategy by identifying which borrower profiles should be prioritised, restricted, or offered modified loan terms — replacing the traditional credit-score-first approach with a statistically validated LTV + DTI dual-band policy.
 
 ---
 
@@ -53,7 +53,7 @@ In the lending sector, financial institutions must decide which borrowers to app
 | **Source Name** | _Kaggle_ |
 | **Direct Access Link** | _https://www.kaggle.com/datasets/yasserh/loan-default-dataset_ |
 | **Row Count** | _15,000_ |
-| **Column Count** | _34_ |
+| **Column Count** | _34 (raw) → 37 (Tableau-ready)_ |
 | **Time Period Covered** | _2019_ |
 | **Format** | _CSV_ |
 
@@ -61,10 +61,16 @@ In the lending sector, financial institutions must decide which borrowers to app
 
 | Column Name | Description | Role in Analysis |
 |---|---|---|
-| _column_1_ | _What it means_ | _Used for KPI / filter / segmentation_ |
-| _column_2_ | _What it means_ | _Used for KPI / filter / segmentation_ |
-| _column_3_ | _What it means_ | _Used for KPI / filter / segmentation_ |
-| _column_4_ | _What it means_ | _Used for KPI / filter / segmentation_ |
+| `status` | Loan default indicator (0 = No Default, 1 = Default) | Target variable |
+| `ltv` | Loan-to-Value ratio | Strongest numerical predictor of default |
+| `debt_to_income_ratio` | Debt-to-Income ratio | Second strongest predictor |
+| `loan_amount` | Total loan amount | Exposure at Default computation |
+| `income` | Borrower income | Risk scoring component |
+| `credit_score` | Borrower credit score | Validated as non-predictive (p=0.735) |
+| `neg_ammortization` | Negative amortisation flag | Strongest categorical risk signal (χ²=363.1) |
+| `lump_sum_payment` | Lump sum payment flag | Protective factor (χ²=498.5) |
+| `ltv_risk_bucket` | LTV risk band (Low/Moderate/High/Very High) | Risk segmentation |
+| `risk_tier` | Computed risk tier | Final lending decision driver |
 
 For full column definitions, see [`docs/data_dictionary.md`](docs/data_dictionary.md).
 
@@ -74,11 +80,17 @@ For full column definitions, see [`docs/data_dictionary.md`](docs/data_dictionar
 
 | KPI | Definition | Formula / Computation |
 |---|---|---|
-| _e.g. Monthly Revenue Growth %_ | _What business outcome this tracks_ | _Show the exact formula or notebook reference_ |
-| _e.g. Customer Churn Rate_ | _What business outcome this tracks_ | _Show the exact formula or notebook reference_ |
-| _e.g. Repeat Purchase Rate_ | _What business outcome this tracks_ | _Show the exact formula or notebook reference_ |
+| Portfolio Default Rate | Overall percentage of loans that defaulted | `(Defaults / Total Loans) × 100` → **23.72%** |
+| Exposure at Default (EAD) | Total loan amount at risk from defaults | `SUM(loan_amount) WHERE status=1` → **₹1.12B (22.64% of portfolio)** |
+| Avg DTI by Default Status | Mean DTI for defaulters vs non-defaulters | Defaulters: **39.59** vs Non-defaulters: **37.49** (2.1pt gap) |
+| Avg LTV by Default Status | Mean LTV for defaulters vs non-defaulters | Defaulters: **75.78** vs Non-defaulters: **71.65** (4.1pt gap) |
+| Default Rate by LTV Bucket | Per-segment default rate | Low: 13.29% → Moderate: 31.65% → Very High: 23.42% |
+| Default Rate by Loan Type | Per-product default rate | Personal Loan: **33.49%** vs Home Loan: **21.74%** |
+| Default Rate by Region | Geographic default distribution | North-East: **33.60%** (highest) vs North: **22.04%** (lowest) |
+| Composite Risk Score | Weighted DTI + LTV + product features | Computed in `notebooks/05_final_load_prep.ipynb` |
+| Risk Tier | Categorical risk band | Score → Low / Medium / High / Very High |
 
-Document KPI logic clearly in `notebooks/04_statistical_analysis.ipynb` and `notebooks/05_final_load_prep.ipynb`.
+KPI logic is documented in `notebooks/04_statistical_analysis.ipynb` and `notebooks/05_final_load_prep.ipynb`.
 
 ---
 
@@ -97,41 +109,52 @@ Store dashboard screenshots in [`tableau/screenshots/`](tableau/screenshots/) an
 
 ## Key Insights
 
-_List 8-12 major findings from the analysis, written in decision language. Each insight should tell the reader what to think or act upon, not merely describe a chart._
+1. **Credit score is not a valid risk predictor** — T-test (p=0.735), point biserial correlation (r=-0.0028), and logistic regression coefficient (-0.0033) all confirm credit score has zero discriminatory power in this portfolio. Lending decisions based on credit score alone will not reduce defaults.
 
-1. _Insight 1_
-2. _Insight 2_
-3. _Insight 3_
-4. _Insight 4_
-5. _Insight 5_
-6. _Insight 6_
-7. _Insight 7_
-8. _Insight 8_
+2. **LTV is the strongest numerical predictor of default** — Point biserial r=0.0976 (highest), logistic regression coefficient 0.2239 (odds ratio 1.251). Each standard deviation increase in LTV raises default odds by 25.1%.
+
+3. **DTI is the second strongest predictor** — Point biserial r=0.0929, logistic regression coefficient 0.1952 (odds ratio 1.216). DTI > 35 shows 28.0% default vs 13.0% below — a 15-point gap.
+
+4. **The industry-standard DTI threshold of 43% is ineffective** — At DTI=43%, the default rate difference is just -2.2%, near zero discriminatory power. Only extreme bands work: DTI < 35 = low risk, DTI > 50 = 40.6% default rate.
+
+5. **Product features are the strongest categorical risk signals** — Negative amortisation (χ²=363.1) and lump sum payment (χ²=498.5) far exceed credit score bands (χ²=2.13, p=0.722) in default prediction.
+
+6. **Personal loans carry 54% higher default risk than home loans** — 33.49% vs 21.74% default rate. Personal loans require stricter screening despite smaller average amounts.
+
+7. **North-East region shows 33.60% default rate** — highest across all regions, 52% higher than North (22.04%). Geographic concentration risk needs monitoring.
+
+8. **Exposure at Default is ₹1.12 billion (22.64% of portfolio)** — Nearly a quarter of the portfolio's total loan exposure is at risk, underscoring the need for proactive risk segmentation.
+
+9. **Defaulters have 4.1 points higher average LTV than non-defaulters** — LTV 75.78 vs 71.65, confirming that over-leveraged borrowers default more frequently.
+
+10. **Higher income is protective against default** — Logistic regression confirms income has a negative coefficient (-0.0463), with lower-income borrowers showing elevated default probability.
 
 ---
 
 ## Recommendations
 
-_Provide 3-5 specific, actionable business recommendations, each linked directly to an insight above._
-
 | # | Insight | Recommendation | Expected Impact |
 |---|---|---|---|
-| 1 | _Which insight does this address?_ | _What should the stakeholder do?_ | _What measurable impact do you expect?_ |
-| 2 | _Which insight does this address?_ | _What should the stakeholder do?_ | _What measurable impact do you expect?_ |
-| 3 | _Which insight does this address?_ | _What should the stakeholder do?_ | _What measurable impact do you expect?_ |
+| 1 | Credit score has zero predictive power (p=0.735) | Replace credit-score-first screening with LTV + DTI dual-band risk assessment | Eliminate false confidence in 3,773+ approvals based on non-predictive metric |
+| 2 | DTI < 35 = 13% default vs > 50 = 40.6% default | Implement DTI dual-band policy: approve DTI < 35, restrict DTI > 50, review 35–50 | Reduce high-DTI default exposure by up to 40% |
+| 3 | Negative amortisation (χ²=363.1) strongly predicts default | Restrict or eliminate negative amortisation products for Medium/High risk tiers | Directly reduce the strongest categorical default signal |
+| 4 | Personal loans default at 33.49% vs home loans at 21.74% | Apply risk-based pricing: higher rates or reduced amounts for personal loans | Offset higher expected losses through appropriate risk premiums |
+| 5 | North-East region has 33.60% default rate | Implement regional exposure caps and enhanced due diligence for North-East | Prevent geographic concentration risk from compounding portfolio losses |
 
 ---
 
 ## Repository Structure
 
 ```text
-SectionD_G!_FinShield/
+SectionD_G1_FinShield/
 |
 |-- README.md
 |
 |-- data/
 |   |-- raw/                         # Original dataset (never edited)
 |   `-- processed/                   # Cleaned output from ETL pipeline
+|       |-- loan_final_cleaned.csv   # Output of notebook 02
+|       `-- loan_tableau_ready.csv   # Output of notebook 05 (Tableau export)
 |
 |-- notebooks/
 |   |-- 01_extraction.ipynb
