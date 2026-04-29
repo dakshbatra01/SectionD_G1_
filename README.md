@@ -70,6 +70,8 @@ Financial institutions face significant losses due to loan defaults and ineffici
 | `neg_ammortization` | Negative amortisation flag | Strongest categorical risk signal |
 | `lump_sum_payment` | Lump sum payment flag | Protective factor |
 | `risk_tier` | Computed risk tier | Final lending decision driver |
+| `ltv_risk_bucket` | LTV categorised into Low / Moderate / High / Very High tiers | Core risk segmentation feature — dual-band policy |
+| `credit_score_bucket` | Credit score banded into Poor / Fair / Good / Very Good / Excellent | Validated as non-discriminatory — included for comparison |
 
 For full column definitions, see [`docs/data_dictionary.md`](docs/data_dictionary.md).
 
@@ -130,14 +132,35 @@ Dashboard screenshots are in [`tableau/screenshots/`](tableau/screenshots/) and 
 
 ## Key Insights
 
-1. The portfolio default rate is **23.72%**, so reducing default risk must be treated as a primary business objective.
-2. `ltv` is the strongest numerical risk signal (`r=0.0976`), indicating high leverage is a key driver of defaults.
-3. `debt_to_income_ratio` is the second strongest numerical risk signal (`r=0.0929`), confirming repayment stress as a major default trigger.
-4. `credit_score` is not statistically predictive in this dataset (`p=0.735`, `r=-0.0028`), so score-only screening is insufficient.
-5. `neg_ammortization` has a strong adverse association with defaults (`χ²=363.1`) and should be tightly controlled.
-6. `lump_sum_payment` behaves as a protective factor (`χ²=498.5`) and can be used in safer product structuring.
-7. The derived `risk_score` and `risk_tier` framework provides clearer segmentation than single-variable filters, supporting better underwriting decisions.
-8. Losses are concentrated in specific segment combinations (region, loan type, and purpose), so targeted controls are more effective than uniform policy actions.
+**1 in 4 Borrowers Defaults — Portfolio Under Systemic Stress**  
+The portfolio default rate is **23.72%** — nearly 1 in 4 loans. This is not a borrower-level outlier problem; it signals a structural gap in the underwriting framework that cannot be resolved with incremental fixes.
+
+**LTV Is the Only Reliable Numerical Risk Gate**  
+`ltv` is the strongest numerical predictor of default (`r=0.0976`, logistic coefficient=0.2239). Very High LTV borrowers (≥90%) default at **35.8%** — more than double the Moderate LTV bucket (16.2%). LTV-based banding is statistically validated (`χ²=451.9`) and is the strongest single gating variable available.
+
+**DTI Works Only at the Extremes — Not at the Industry Threshold**  
+DTI is the second strongest signal (`r=0.0929`), but the industry-standard 43% cutoff is counterproductive in this portfolio — borrowers below it actually default slightly more (24.3%) than those above (22.1%). Risk only concentrates meaningfully below DTI=35 (13.0% default) and above DTI=50 (40.6%), requiring a dual-band replacement policy.
+
+**Credit Score Is Statistically Irrelevant**  
+`credit_score` shows near-zero correlation with default (`r=-0.0028`, `p=0.735`). Borrowers rated Excellent default at 23.7% — virtually identical to those rated Poor at 23.9%. The `credit_score_bucket` chi-square test also returned non-significant (`p=0.722`). Score-first screening provides false confidence with no actual risk separation.
+
+**Product Features Outperform Borrower Characteristics**  
+Lump sum payment (`χ²=498.5`) and negative amortisation (`χ²=363.1`) are the two strongest default predictors in the entire portfolio — stronger than any borrower metric. These are loan design choices, not borrower traits, meaning the institution's own product catalogue is a primary source of default risk.
+
+**Lump Sum Payment Is the Highest-Risk Feature at 76.8%**  
+Borrowers with a lump sum payment structure default at **76.8%** — 3× the portfolio average. Only 315 such loans exist, yet 242 defaulted. These borrowers make no monthly payments and rely on a future windfall that rarely materialises. This is the single most actionable restriction available.
+
+**Negative Amortisation Doubles the Default Rate**  
+`neg_ammortization = yes` borrowers default at **43.5%** — nearly double the 23.7% portfolio average. These loans accumulate debt instead of reducing it, directly eroding repayment capacity over time. The strong chi-square association (`χ²=363.1`) confirms this is not coincidence.
+
+**North-East and Home Improvement Are Concentrated Loss Pockets**  
+The North-East region has the highest default rate at **~33%**, over 11 percentage points above the North region. Home improvement loans default at **~32%**, the highest of any loan purpose — borrowers stack new debt on existing mortgages, amplifying total financial burden. Geographic and purpose-specific controls deliver more targeted loss containment than uniform policy.
+
+**Personal Loans Carry Structurally Higher Unsecured Risk**  
+Personal loans default at **33.5%** — nearly 12 percentage points above home loans (21.7%). Without collateral backing, these loans have no recovery buffer when borrowers face financial stress. A uniform approval standard across loan types systematically misprices this structural difference.
+
+**Risk Tiers Replace Single-Variable Screening**  
+The composite `risk_tier` framework (built on LTV, DTI, product features, and behavioural flags) produces clear default rate separation: Very High tier defaults at 45%+ while Low tier defaults at under 10%. This multi-factor segmentation outperforms any single-variable gate and directly supports the LTV + DTI dual-band lending policy.
 
 ---
 
@@ -145,11 +168,11 @@ Dashboard screenshots are in [`tableau/screenshots/`](tableau/screenshots/) and 
 
 | # | Insight | Recommendation | Expected Impact |
 |---|---|---|---|
-| 1 | 2, 3 | Implement a dual-threshold underwriting policy using `ltv` and `debt_to_income_ratio` (auto-approve low-risk, review medium-risk, restrict extreme-risk bands). | Lower approval of fragile profiles and improved portfolio default performance. |
-| 2 | 4, 7 | Shift from credit-score-first screening to `risk_score` / `risk_tier` based decisioning. | Better alignment between approval decisions and observed default behavior. |
-| 3 | 5 | Restrict negative-amortisation loans through stricter eligibility and risk-based pricing controls. | Reduced structural default risk and lower expected loss concentration. |
-| 4 | 6 | Offer safer repayment structures (including lump-sum capable plans where suitable) for borderline borrowers. | Improved repayment resilience and reduced delinquency spillover. |
-| 5 | 8 | Run a monthly segment watchlist (region × loan type × purpose) and apply targeted lending limits in high-loss pockets. | Faster risk containment and improved capital allocation. |
+| 1 | **LTV & DTI Dual-Band Policy** | Replace the current single-score approval gate with a two-variable threshold system: auto-approve borrowers with LTV < 60% and DTI < 35%; hold for manual review between 60–90% LTV and 35–50% DTI; hard-restrict loans above 90% LTV or DTI above 50%. | Estimated reduction of portfolio default rate from 23.72% to below 20.73%, saving over ₹4.28 Cr in expected loss exposure. |
+| 2 | **Credit Score Screening Is Broken** | Retire credit score as the primary approval filter. Replace it with the composite `risk_tier` score built from LTV bucket, DTI band, product flags, and behavioural signals — which produces actual default rate separation unlike credit score bands (23.7% vs 23.9% across all tiers). | Decisions aligned to observed default behaviour instead of a metric with zero statistical predictive power. |
+| 3 | **Negative Amortisation Must Be Restricted** | Introduce mandatory eligibility gates for negative amortisation products — minimum LTV < 70% and DTI < 35%, combined with risk-based premium pricing for borderline approvals. At 43.5% default rate with χ²=363.1, this product needs structural controls, not just monitoring. | Reduced structural default risk and a measurable drop in high-tier portfolio concentration. |
+| 4 | **Lump Sum Payment Warrants Immediate Halt** | Suspend new lump sum payment approvals pending a portfolio review. At 76.8% default rate across 315 existing loans, this product feature is the single highest-risk element in the portfolio. Existing holders should be proactively migrated to standard amortising structures. | Immediate containment of the most acute default risk in the portfolio with no new capital at risk. |
+| 5 | **Region & Purpose Targeted Lending Limits** | Establish a monthly segment watchlist tracking default rates by region × loan type × loan purpose. Apply hard lending caps in the North-East (33% default rate) and on home improvement loans (32% default rate), with enhanced income and DTI verification for new approvals in these segments. | Faster risk containment in known loss pockets and improved capital allocation away from structurally risky segments. |
 
 ---
 
@@ -163,6 +186,9 @@ SectionD_G1_FinShield/
 |-- data/
 |   |-- raw/                         # Original dataset (never edited)
 |   `-- processed/                   # Cleaned output from ETL pipeline
+|       |-- loan_stage1_cleaned.csv  # Output of Notebook 01 — initial clean
+|       |-- loan_final_cleaned.csv   # Output of Notebook 02 — feature-engineered
+|       `-- loan_tableau_ready.csv   # Output of Notebook 05 — KPIs & risk tiers
 |
 |-- notebooks/
 |   |-- 01_extraction.ipynb
